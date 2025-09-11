@@ -1,0 +1,16 @@
+# Ignore Airflow logs & DB
+airflow/logs/
+airflow/airflow.db
+airflow/airflow-webserver.pid
+
+# Ignore data outputs
+data/*.json
+data/nohup.out
+data/logs/
+
+# Ignore models (too big for GitHub)
+data/models/
+
+# Python cache
+__pycache__/
+*.pyc
