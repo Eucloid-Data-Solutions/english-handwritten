@@ -14,3 +14,5 @@ data/models/
 # Python cache
 __pycache__/
 *.pyc
+
+tmp/

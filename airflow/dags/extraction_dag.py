@@ -3,12 +3,12 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import sys
 import os
-sys.path.append('/data')
+sys.path.append('/english-handwritten/data')
 from extractor import process_batch_documents, extract_document
 
 def process_all_documents():
     """Process both INDEX I and INDEX II documents"""
-    result = process_batch_documents("/data/index1/", "/data/index2/", delay_seconds=2, debug=False)
+    result = process_batch_documents("/english-handwritten/data/index1/", "/english-handwritten/data/index2/", delay_seconds=2, debug=False)
     print(f"✅ Batch processing complete!")
     print(f"INDEX I: {result['summary']['index1_successful']} success, {result['summary']['index1_failed']} failed")
     print(f"INDEX II: {result['summary']['index2_successful']} success, {result['summary']['index2_failed']} failed")
@@ -17,7 +17,7 @@ def process_all_documents():
 def process_index1_only():
     """Process only INDEX I documents"""
     import glob
-    index1_files = glob.glob("/data/index1/*.jpg") + glob.glob("/data/index1/*.jpeg") + glob.glob("/data/index1/*.png")
+    index1_files = glob.glob("/english-handwritten/data/index1/*.jpg") + glob.glob("/english-handwritten/data/index1/*.jpeg") + glob.glob("/english-handwritten/data/index1/*.png")
     results = []
     for file_path in sorted(index1_files):
         result = extract_document(file_path, "INDEX_1", debug=False)
@@ -28,7 +28,7 @@ def process_index1_only():
 def process_index2_only():
     """Process only INDEX II documents"""
     import glob
-    index2_files = glob.glob("/data/index2/*.jpg") + glob.glob("/data/index2/*.jpeg") + glob.glob("/data/index2/*.png")
+    index2_files = glob.glob("/english-handwritten/data/index2/*.jpg") + glob.glob("/english-handwritten/data/index2/*.jpeg") + glob.glob("/english-handwritten/data/index2/*.png")
     results = []
     for file_path in sorted(index2_files):
         result = extract_document(file_path, "INDEX_2", debug=False)

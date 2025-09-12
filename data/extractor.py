@@ -283,7 +283,7 @@ Use geographical knowledge to ensure place names are correctly identified.
     
     # The payload - FIXED MODEL NAME
     payload = {
-        "model": "/data/models/gemma-3-12b-it",  # ← FIXED: Use the correct model path
+        "model": "/english-handwritten/data/models/gemma-3-12b-it",  # ← FIXED: Use the correct model path
         "temperature": 0.2,
         "top_p": 0.5,
         "messages": [
@@ -340,7 +340,7 @@ Use geographical knowledge to ensure place names are correctly identified.
                 
                 # Insert to SQLite
                 try:
-                    conn = sqlite3.connect('/data/db/extraction.db')
+                    conn = sqlite3.connect('/english-handwritten/data/db/extraction.db')
                     cursor = conn.cursor()
                     
                     # Insert document metadata
@@ -508,7 +508,7 @@ def process_batch_documents(index1_folder, index2_folder, delay_seconds=2, debug
         print(f"\n⚠️ {total_failed} documents failed. Check the output above for error details.")
     
     # Save batch results to file
-    batch_results_file = f"/data/batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    batch_results_file = f"/english-handwritten/data/batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     try:
         with open(batch_results_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
@@ -538,7 +538,7 @@ def test_single_document(image_path, index_type="INDEX_1"):
         print(f"✅ Test successful: {entries_count} entries extracted")
         
         # Save result to file
-        test_result_file = f"/data/test_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        test_result_file = f"/english-handwritten/data/test_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         try:
             with open(test_result_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
@@ -555,11 +555,11 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "test":
             # Test mode - single document
-            image_path = sys.argv[2] if len(sys.argv) > 2 else "/data/index1/index1_3.jpg"
+            image_path = sys.argv[2] if len(sys.argv) > 2 else "/english-handwritten/data/index1/index1_3.jpg"
             index_type = sys.argv[3] if len(sys.argv) > 3 else "INDEX_1"
             test_single_document(image_path, index_type)
         else:
             print("Usage: python3 script.py [test] [image_path] [index_type]")
     else:
         # Batch mode - all documents
-        process_batch_documents("/data/index1/", "/data/index2/", debug=False)
+        process_batch_documents("/english-handwritten/data/index1/", "/english-handwritten/data/index2/", debug=False)
