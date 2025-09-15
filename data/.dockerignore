@@ -4,6 +4,9 @@ __pycache__/
 logs/
 *.pyc
 models/
+db/
+index1/
+index2/
 *.log
 batch_results_*
 test_*
