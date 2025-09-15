@@ -1,0 +1,10 @@
+*.json
+nohup.out
+__pycache__/
+logs/
+*.pyc
+models/
+*.log
+batch_results_*
+test_*
+EOF
