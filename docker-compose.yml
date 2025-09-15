@@ -1,6 +1,58 @@
 services:
+  airflow-init:
+    image: apache/airflow:2.8.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com
+      "
+    restart: "no"
+
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+      - AIRFLOW__WEBSERVER__SECRET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+    volumes:
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
+    ports:
+      - "8080:8080"
+    command: webserver
+    depends_on:
+      - airflow-init
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+    volumes:
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
+    command: scheduler
+    depends_on:
+      - airflow-init
+
   vllm-server:
     image: vllm/vllm-openai:latest
+    restart: always
     ports:
       - "8001:8001"
     volumes:
@@ -11,26 +63,32 @@ services:
         reservations:
           devices:
             - capabilities: [gpu]
-
-  airflow-webserver:
-    image: apache/airflow:2.8.1
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./airflow:/opt/airflow
-      - ./data:/english-handwritten/data
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
-    command: >
-      bash -c "
-        airflow db init || true
-        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true
-        airflow webserver
-      "
+    shm_size: 4g
 
   extractor:
-    build: ./data
+    build:
+      context: ./data
+      dockerfile: Dockerfile
+    depends_on:
+      - vllm-server
     volumes:
       - ./data:/english-handwritten/data
-    command: sleep infinity
+    environment:
+      - VLLM_API_URL=http://vllm-server:8001/v1/chat/completions
+    command: >
+      bash -c "
+        if [ ! -f /english-handwritten/data/db/.db_initialized ]; then
+          python3 /english-handwritten/data/init_db.py
+          touch /english-handwritten/data/db/.db_initialized
+        fi
+        sleep infinity
+      "
+
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    restart: always
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data/db:/data/db
+    command: /data/db/extraction.db --host 0.0.0.0 --port 8888
