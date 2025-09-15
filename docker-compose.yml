@@ -59,20 +59,7 @@ services:
       - VLLM_API_URL=http://vllm-server:8001/v1/chat/completions
       - AIRFLOW_API_URL=http://airflow-webserver:8080
     command: sleep infinity # You can override this to run batch jobs
-  
-    sqlite-web:
-      image: coleifer/sqlite-web:latest
-      restart: always
-      ports:
-        - "8888:8888"
-      volumes:
-        - ./data/db:/data/db
-        - ./data/logs/sqlite-web:/logs
-      command: /data/db/extraction.db --host 0.0.0.0 --port 8888
 
-networks:
-  default:
-    driver: bridge
   sqlite-web:
     image: coleifer/sqlite-web:latest
     restart: always
@@ -80,4 +67,9 @@ networks:
       - "8888:8888"
     volumes:
       - ./data/db:/data/db
+      - ./data/logs/sqlite-web:/logs
     command: /data/db/extraction.db --host 0.0.0.0 --port 8888
+
+networks:
+  default:
+    driver: bridge
