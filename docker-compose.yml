@@ -1,69 +1,110 @@
-
+version: '3.8'
 
 services:
+  # Initialize database and Airflow
+  airflow-init:
+    image: apache/airflow:2.8.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com
+      "
+
   airflow-webserver:
     image: apache/airflow:2.8.1
     restart: always
     environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/extraction.db
+      - AIRFLOW__WEBSERVER__SECRET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/airflow.cfg:/opt/airflow/airflow.cfg
-      - ./data/db:/opt/airflow/db
-      - ./data/logs/airflow-webserver:/opt/airflow/logs
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
     ports:
       - "8080:8080"
     command: webserver
     depends_on:
+      - airflow-init
       - airflow-scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   airflow-scheduler:
     image: apache/airflow:2.8.1
     restart: always
     environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__FERNET_KEY=ZYIaUXbzRnWNd78MBgH6Yg==
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/extraction.db
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/airflow.cfg:/opt/airflow/airflow.cfg
-      - ./data/db:/opt/airflow/db
-      - ./data/logs/airflow-scheduler:/opt/airflow/logs
+      - ./airflow:/opt/airflow
+      - ./data:/english-handwritten/data
     command: scheduler
+    depends_on:
+      - airflow-init
+
+  # Database initialization service
+  db-init:
+    build: ./data
+    volumes:
+      - ./data:/english-handwritten/data
+    command: python3 /english-handwritten/data/init_db.py
+    restart: "no"
 
   vllm-server:
-      image: vllm/vllm-openai:latest
-      restart: always
-      ports:
-        - "8001:8001"
-      volumes:
-        - ./data/models:/models
-        - ./data/logs/vllm-server:/app/logs
-      command: --model /models/gemma-3-12b-it --port 8001
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - capabilities: [gpu]
-      shm_size: 2g
+    image: vllm/vllm-openai:latest
+    restart: always
+    ports:
+      - "8001:8001"
+    volumes:
+    - ./data:/english-handwritten/data
+    command: --model /english-handwritten/data/models/gemma-3-12b-it --dtype bfloat16 --tensor-parallel-size 4 --host 0.0.0.0 --port 8001
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    shm_size: 4g
 
   extractor:
     build: ./data
     depends_on:
       - vllm-server
-      - airflow-webserver
     volumes:
-      - ./data:/app/data
-      - ./data/db:/app/data/db
-      - ./data/index1:/app/data/index1
-      - ./data/index2:/app/data/index2
-      - ./data/logs/extractor:/app/logs
+      - ./data:/english-handwritten/data
     environment:
       - VLLM_API_URL=http://vllm-server:8001/v1/chat/completions
       - AIRFLOW_API_URL=http://airflow-webserver:8080
-    command: sleep infinity # You can override this to run batch jobs
+    command: >
+      bash -c "
+        if [ ! -f /english-handwritten/data/db/.db_initialized ]; then
+          echo 'Initializing database...'
+          python3 /english-handwritten/data/init_db.py
+          touch /english-handwritten/data/db/.db_initialized
+        fi
+        sleep infinity
+      "
 
   sqlite-web:
     image: coleifer/sqlite-web:latest
@@ -72,8 +113,10 @@ services:
       - "8888:8888"
     volumes:
       - ./data/db:/data/db
-      - ./data/logs/sqlite-web:/logs
     command: /data/db/extraction.db --host 0.0.0.0 --port 8888
+
+volumes:
+  airflow-data:
 
 networks:
   default:
