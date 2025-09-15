@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    restart: always
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/extraction.db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/airflow.cfg:/opt/airflow/airflow.cfg
+      - ./data/db:/opt/airflow/db
+      - ./data/logs/airflow-webserver:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: webserver
+    depends_on:
+      - airflow-scheduler
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    restart: always
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/extraction.db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/airflow.cfg:/opt/airflow/airflow.cfg
+      - ./data/db:/opt/airflow/db
+      - ./data/logs/airflow-scheduler:/opt/airflow/logs
+    command: scheduler
+
+  vllm-server:
+    image: vllm/vllm:latest
+    restart: always
+    volumes:
+      - ./data/models:/models
+      - ./data/logs/vllm-server:/app/logs
+    ports:
+      - "8001:8001"
+    command: >
+      python -m vllm.entrypoints.api_server --model /models/gemma-3-12b-it --dtype bfloat16 --tensor-parallel-size 4 --host 0.0.0.0 --port 8001
+
+  extractor:
+    build: ./data
+    depends_on:
+      - vllm-server
+      - airflow-webserver
+    volumes:
+      - ./data:/app/data
+      - ./data/db:/app/data/db
+      - ./data/index1:/app/data/index1
+      - ./data/index2:/app/data/index2
+      - ./data/logs/extractor:/app/logs
+    environment:
+      - VLLM_API_URL=http://vllm-server:8001/v1/chat/completions
+      - AIRFLOW_API_URL=http://airflow-webserver:8080
+    command: sleep infinity # You can override this to run batch jobs
+  
+    sqlite-web:
+      image: coleifer/sqlite-web:latest
+      restart: always
+      ports:
+        - "8888:8888"
+      volumes:
+        - ./data/db:/data/db
+        - ./data/logs/sqlite-web:/logs
+      command: /data/db/extraction.db --host 0.0.0.0 --port 8888
+
+networks:
+  default:
+    driver: bridge
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    restart: always
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data/db:/data/db
+    command: /data/db/extraction.db --host 0.0.0.0 --port 8888
